@@ -53,10 +53,14 @@ try:
     st.sidebar.title("💎 Painel de Filtros")
     st.sidebar.markdown("---")
     
-    # Criando listas de filtros sem conversão forçada para INT (evita erro com 'março')
-    anos = sorted(df1_raw['Ano'].dropna().unique(), reverse=True)
-    meses = sorted(df1_raw['Mês'].dropna().unique())
-    dias = sorted(df1_raw['dia'].dropna().unique())
+    # MELHORIA: Combinar dados das duas abas para garantir que todos os meses/anos apareçam
+    anos_comb = pd.concat([df1_raw['Ano'], df2_raw['Ano']]).dropna().unique()
+    meses_comb = pd.concat([df1_raw['Mês'], df2_raw['Mês']]).dropna().unique()
+    dias_comb = pd.concat([df1_raw['dia'], df2_raw['dia']]).dropna().unique()
+
+    anos = sorted(anos_comb, reverse=True)
+    meses = sorted(meses_comb)
+    dias = sorted(dias_comb)
 
     sel_ano = st.sidebar.multiselect("Ano", options=anos, default=anos)
     sel_mes = st.sidebar.multiselect("Mês", options=meses, default=meses)
