@@ -33,7 +33,6 @@ st.markdown("""
 # 2. FUNÇÕES DE CARREGAMENTO (Links de Abas Diferentes)
 @st.cache_data(ttl=300)
 def load_data_aba1():
-    # Link da Aba 1: Inadimplência
     url1 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?output=csv"
     df = pd.read_csv(url1)
     df['Data de Envio'] = pd.to_datetime(df['Data de Envio'], errors='coerce')
@@ -41,7 +40,6 @@ def load_data_aba1():
 
 @st.cache_data(ttl=300)
 def load_data_aba2():
-    # Link da Aba 2: Controle de Envios (Logs) - GID 204684460
     url2 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?gid=204684460&single=true&output=csv"
     df = pd.read_csv(url2)
     df['Data de Envio'] = pd.to_datetime(df['Data de Envio'], errors='coerce')
@@ -55,17 +53,15 @@ try:
     st.sidebar.title("💎 Painel de Filtros")
     st.sidebar.markdown("---")
     
-    # Filtro de Data Global (Combina datas das duas bases para o limite do seletor)
-    all_dates = pd.concat([df1_raw['Data de Envio'], df2_raw['Data de Envio']]).dropna()
-    min_date = all_dates.min().to_pydatetime() if not all_dates.empty else pd.Timestamp.now().to_pydatetime()
-    max_date = all_dates.max().to_pydatetime() if not all_dates.empty else pd.Timestamp.now().to_pydatetime()
-    
-    date_range = st.sidebar.date_input(
-        "Selecione o Período Geral",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
+    # Unificando opções para os filtros de Mês, Ano e Dia
+    # Usando a df1 como referência para as listas de filtros
+    anos = sorted(df1_raw['Ano'].dropna().unique().astype(int), reverse=True)
+    meses = sorted(df1_raw['Mês'].dropna().unique().astype(int))
+    dias = sorted(df1_raw['dia'].dropna().unique().astype(int))
+
+    sel_ano = st.sidebar.multiselect("Ano", options=anos, default=anos)
+    sel_mes = st.sidebar.multiselect("Mês", options=meses, default=meses)
+    sel_dia = st.sidebar.multiselect("Dia", options=dias, default=dias)
 
     # --- NAVEGAÇÃO POR ABAS ---
     tab_inadimplencia, tab_logs = st.tabs(["🏛️ Análise de Inadimplência", "📧 Controle de Envios (Logs)"])
@@ -75,12 +71,16 @@ try:
     # ---------------------------------------------------------
     with tab_inadimplencia:
         st.header("Gestão de Inadimplência e Seguradoras")
-        list_seg = df1_raw['Seguradora'].unique() if 'Seguradora' in df1_raw.columns else []
-        sel_seg = st.sidebar.multiselect("Filtrar Seguradoras (Aba 1)", list_seg, default=list_seg)
         
-        mask1 = df1_raw['Seguradora'].isin(sel_seg) if 'Seguradora' in df1_raw.columns else pd.Series(True, index=df1_raw.index)
-        if isinstance(date_range, tuple) and len(date_range) == 2:
-            mask1 &= (df1_raw['Data de Envio'].dt.date >= date_range[0]) & (df1_raw['Data de Envio'].dt.date <= date_range[1])
+        # Filtro de Seguradora específico da Aba 1
+        list_seg = df1_raw['Seguradora'].unique() if 'Seguradora' in df1_raw.columns else []
+        sel_seg = st.sidebar.multiselect("Filtrar Seguradoras", list_seg, default=list_seg)
+        
+        # Aplicação dos Filtros (Ano, Mês, Dia + Seguradora)
+        mask1 = (df1_raw['Ano'].isin(sel_ano)) & (df1_raw['Mês'].isin(sel_mes)) & (df1_raw['dia'].isin(sel_dia))
+        if 'Seguradora' in df1_raw.columns:
+            mask1 &= (df1_raw['Seguradora'].isin(sel_seg))
+            
         df1 = df1_raw[mask1]
 
         c1, c2, c3, c4 = st.columns(4)
@@ -97,73 +97,61 @@ try:
 
         st.divider()
         st.subheader("📈 Evolução de Envios")
-        st.area_chart(df1.groupby(df1['Data de Envio'].dt.date).size(), color="#1e3a8a")
+        if not df1.empty:
+            st.area_chart(df1.groupby(df1['Data de Envio'].dt.date).size(), color="#1e3a8a")
 
         col_v1, col_v2 = st.columns([1, 1])
         with col_v1:
             st.subheader("🏢 Volume por Seguradora")
-            if 'Seguradora' in df1.columns:
+            if 'Seguradora' in df1.columns and not df1.empty:
                 seg_counts = df1['Seguradora'].value_counts().reset_index()
                 seg_counts.columns = ['Seguradora', 'Quantidade']
                 st.bar_chart(seg_counts.set_index('Seguradora'), color="#3b82f6")
         with col_v2:
             st.subheader("📊 Tabela de Volumes")
-            if 'Seguradora' in df1.columns:
+            if 'Seguradora' in df1.columns and not df1.empty:
                 st.dataframe(seg_counts, use_container_width=True, hide_index=True)
 
     # ---------------------------------------------------------
-    # ABA 2: LOGS DE ENVIO (FOCO NA COLUNA 'ENVIADO POR')
+    # ABA 2: LOGS DE ENVIO (Filtros Ano, Mês, Dia aplicados)
     # ---------------------------------------------------------
     with tab_logs:
         st.header("Produtividade de Envios")
         
-        mask2 = pd.Series(True, index=df2_raw.index)
-        if isinstance(date_range, tuple) and len(date_range) == 2:
-            mask2 &= (df2_raw['Data de Envio'].dt.date >= date_range[0]) & (df2_raw['Data de Envio'].dt.date <= date_range[1])
+        # Aplicação dos Filtros na Aba 2 (Ano, Mês, Dia)
+        mask2 = (df2_raw['Ano'].isin(sel_ano)) & (df2_raw['Mês'].isin(sel_mes)) & (df2_raw['dia'].isin(sel_dia))
         df2 = df2_raw[mask2]
 
-        # CARDS DE PRODUTIVIDADE
         l1, l2, l3 = st.columns(3)
         with l1: st.metric("Volume de E-mails", len(df2))
         with l2:
             if 'Enviado Por' in df2.columns:
                 top_p = df2['Enviado Por'].mode()[0] if not df2.empty else "N/A"
                 st.metric("Operador Mais Ativo", top_p)
-            else:
-                st.metric("Operador Mais Ativo", "Coluna não encontrada")
         with l3:
-            # Se não houver coluna status, assume total como sucesso para o card
             status_val = (df2['Status'] == 'Sucesso').sum() if 'Status' in df2.columns else len(df2)
             st.metric("Envios Confirmados", status_val)
 
         st.divider()
 
-        # SEÇÃO DE PRODUTIVIDADE LIMPA (ENVIADO POR)
+        # Ranking de Produtividade (Enviado Por)
         st.subheader("👤 Ranking de Produtividade (Enviado Por)")
-        if 'Enviado Por' in df2.columns:
+        if 'Enviado Por' in df2.columns and not df2.empty:
             p_col1, p_col2 = st.columns([1.6, 1])
-            
             prod_df = df2['Enviado Por'].value_counts().reset_index()
             prod_df.columns = ['Operador', 'Total de Envios']
-
             with p_col1:
-                # Gráfico horizontal para clareza visual dos nomes
                 st.bar_chart(prod_df.set_index('Operador'), color="#059669", horizontal=True)
-            
             with p_col2:
-                # Tabela limpa com os números exatos
                 st.dataframe(prod_df, use_container_width=True, hide_index=True)
-        else:
-            st.warning("A coluna 'Enviado Por' não foi detectada nesta aba.")
         
         st.divider()
 
-        # Detalhamento de Assuntos e Histórico
         col_sub1, col_sub2 = st.columns(2)
         with col_sub1:
             st.subheader("📋 Assuntos Frequentes")
-            if 'Assunto' in df2.columns:
-                st.dataframe(df2['Assunto'].value_counts().head(10).reset_index().rename(columns={'count':'Qtd'}), use_container_width=True, hide_index=True)
+            if 'Assunto' in df2.columns and not df2.empty:
+                st.dataframe(df2['Assunto'].value_counts().head(10).reset_index(), use_container_width=True, hide_index=True)
         
         with col_sub2:
             st.subheader("🔍 Resumo de Logs Recentes")
