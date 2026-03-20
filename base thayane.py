@@ -26,14 +26,14 @@ st.markdown("""
         background-color: #1e3a8a !important; 
         color: white !important; 
     }
-    .dataframe { border-radius: 10px; }
+    /* Deixar as tabelas mais limpas */
+    .stDataFrame { background-color: #ffffff; border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
 # 2. FUNÇÕES DE CARREGAMENTO (Separadas por Aba)
 @st.cache_data(ttl=300)
 def load_data_aba1():
-    # Link da primeira aba (Inadimplência)
     url1 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?output=csv"
     df = pd.read_csv(url1)
     df['Data de Envio'] = pd.to_datetime(df['Data de Envio'], errors='coerce')
@@ -41,15 +41,13 @@ def load_data_aba1():
 
 @st.cache_data(ttl=300)
 def load_data_aba2():
-    # IMPORTANTE: Se o link da segunda aba for diferente, altere aqui. 
-    # Geralmente links do Google Sheets para abas diferentes terminam com um 'gid' específico.
+    # Link da segunda aba (Logs/Envios)
     url2 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?output=csv"
     df = pd.read_csv(url2)
     df['Data de Envio'] = pd.to_datetime(df['Data de Envio'], errors='coerce')
     return df
 
 try:
-    # Carregando as bases
     df1_raw = load_data_aba1()
     df2_raw = load_data_aba2()
 
@@ -57,7 +55,7 @@ try:
     st.sidebar.title("💎 Painel de Filtros")
     st.sidebar.markdown("---")
     
-    # Filtro de Data que afeta todo o Dashboard
+    # Filtro de Data Global
     all_dates = pd.concat([df1_raw['Data de Envio'], df2_raw['Data de Envio']]).dropna()
     min_date, max_date = all_dates.min().to_pydatetime(), all_dates.max().to_pydatetime()
     
@@ -72,22 +70,18 @@ try:
     tab_inadimplencia, tab_logs = st.tabs(["🏛️ Análise de Inadimplência", "📧 Controle de Envios (Logs)"])
 
     # ---------------------------------------------------------
-    # ABA 1: INADIMPLÊNCIA
+    # ABA 1: INADIMPLÊNCIA (Mantida Integralmente)
     # ---------------------------------------------------------
     with tab_inadimplencia:
         st.header("Gestão de Inadimplência e Seguradoras")
-        
-        # Filtros específicos Aba 1
         list_seg = df1_raw['Seguradora'].unique()
         sel_seg = st.sidebar.multiselect("Filtrar Seguradoras (Aba 1)", list_seg, default=list_seg)
         
-        # Aplicar Filtros
         mask1 = df1_raw['Seguradora'].isin(sel_seg)
         if len(date_range) == 2:
             mask1 &= (df1_raw['Data de Envio'].dt.date >= date_range[0]) & (df1_raw['Data de Envio'].dt.date <= date_range[1])
         df1 = df1_raw[mask1]
 
-        # CARDS DE MÉTRICAS
         c1, c2, c3, c4 = st.columns(4)
         with c1: st.metric("Total Notificações", len(df1))
         with c2:
@@ -97,17 +91,13 @@ try:
             top_s = df1['Seguradora'].mode()[0] if not df1.empty else "N/A"
             st.metric("Seguradora Líder", top_s)
         with c4:
-            operador = df1['CPF do Usuário'].nunique() if 'CPF do Usuário' in df1.columns else 0
-            st.metric("Operadores Ativos", operador)
+            operador_count = df1['CPF do Usuário'].nunique() if 'CPF do Usuário' in df1.columns else 0
+            st.metric("Operadores Ativos", operador_count)
 
         st.divider()
-
-        # Evolução Temporal
         st.subheader("📈 Evolução de Envios")
-        df_time1 = df1.groupby(df1['Data de Envio'].dt.date).size()
-        st.area_chart(df_time1, color="#1e3a8a")
+        st.area_chart(df1.groupby(df1['Data de Envio'].dt.date).size(), color="#1e3a8a")
 
-        # Seção de Volumes (Gráfico + Tabela lado a lado)
         col_v1, col_v2 = st.columns([1, 1])
         with col_v1:
             st.subheader("🏢 Volume por Seguradora")
@@ -118,17 +108,15 @@ try:
             st.subheader("📊 Tabela de Volumes")
             st.dataframe(seg_counts, use_container_width=True, hide_index=True)
 
-        # Recorrência
         st.subheader("⚠️ Clientes com Múltiplos Avisos")
-        st.dataframe(recorrencia[recorrencia > 1].reset_index().rename(columns={'index':'Cliente', 'Cliente':'Total'}), use_container_width=True, hide_index=True)
+        st.dataframe(recorrencia[recorrencia > 1].reset_index().rename(columns={'count':'Total'}), use_container_width=True, hide_index=True)
 
     # ---------------------------------------------------------
-    # ABA 2: LOGS DE ENVIO (NOVA)
+    # ABA 2: LOGS DE ENVIO (MELHORIA DE CLAREZA SOLICITADA)
     # ---------------------------------------------------------
     with tab_logs:
-        st.header("Controle de Logs e Produtividade")
+        st.header("Produtividade de Envios")
         
-        # Filtro de Data Aba 2
         mask2 = pd.Series(True, index=df2_raw.index)
         if len(date_range) == 2:
             mask2 &= (df2_raw['Data de Envio'].dt.date >= date_range[0]) & (df2_raw['Data de Envio'].dt.date <= date_range[1])
@@ -136,32 +124,47 @@ try:
 
         # CARDS DE LOGS
         l1, l2, l3 = st.columns(3)
-        with l1: st.metric("Total de Envios (Logs)", len(df2))
+        with l1: st.metric("Volume de E-mails", len(df2))
         with l2:
-            if 'Enviado Por' in df2.columns:
-                top_sender = df2['Enviado Por'].mode()[0] if not df2.empty else "N/A"
-                st.metric("Top Remetente", top_sender)
+            col_sender = 'Enviado Por' if 'Enviado Por' in df2.columns else 'Email Remetente'
+            top_p = df2[col_sender].mode()[0] if not df2.empty and col_sender in df2.columns else "N/A"
+            st.metric("Operador Mais Ativo", top_p)
         with l3:
-            status_envio = (df2['Status'] == 'Sucesso').sum() if 'Status' in df2.columns else "N/D"
-            st.metric("Status Sucesso", status_envio)
+            st.metric("Status Sucesso", (df2['Status'] == 'Sucesso').sum() if 'Status' in df2.columns else "Confira na Tabela")
 
         st.divider()
 
-        # IDEIA BRILHANTE: Ranking de Assuntos (Categorização)
-        st.subheader("📋 Assuntos Mais Frequentes")
-        sub_col1, sub_col2 = st.columns([1.5, 1])
-        
-        if 'Assunto' in df2.columns:
-            assuntos = df2['Assunto'].value_counts().head(10).reset_index()
-            assuntos.columns = ['Assunto', 'Frequência']
-            with sub_col1:
-                st.bar_chart(assuntos.set_index('Assunto'), color="#10b981", horizontal=True)
-            with sub_col2:
-                st.dataframe(assuntos, use_container_width=True, hide_index=True)
+        # SEÇÃO DE PRODUTIVIDADE LIMPA
+        st.subheader("👤 Quem enviou e quanto?")
+        if col_sender in df2.columns:
+            prod_col1, prod_col2 = st.columns([1.5, 1])
+            
+            prod_data = df2[col_sender].value_counts().reset_index()
+            prod_data.columns = ['Operador', 'Qtd Enviada']
 
-        st.subheader("🔍 Histórico Completo de Logs")
-        st.dataframe(df2, use_container_width=True, hide_index=True)
+            with prod_col1:
+                # Gráfico horizontal é mais limpo para nomes
+                st.bar_chart(prod_data.set_index('Operador'), color="#059669", horizontal=True)
+            
+            with prod_col2:
+                st.dataframe(prod_data, use_container_width=True, hide_index=True)
+        
+        st.divider()
+
+        # Ranking de Assuntos e Base Completa
+        col_sub1, col_sub2 = st.columns(2)
+        with col_sub1:
+            st.subheader("📋 Assuntos Frequentes")
+            if 'Assunto' in df2.columns:
+                st.dataframe(df2['Assunto'].value_counts().head(10), use_container_width=True)
+        
+        with col_sub2:
+            st.subheader("🔍 Últimos Logs")
+            cols_log = [c for c in ['Data de Envio', col_sender, 'Status'] if c in df2.columns]
+            st.dataframe(df2[cols_log].head(10), use_container_width=True, hide_index=True)
+
+        with st.expander("📂 Abrir Base de Logs Completa"):
+            st.dataframe(df2, use_container_width=True)
 
 except Exception as e:
-    st.error(f"Erro ao processar integração: {e}")
-    st.info("Dica: Verifique se as colunas da nova aba estão escritas exatamente como no código.")
+    st.error(f"Erro na integração: {e}")
