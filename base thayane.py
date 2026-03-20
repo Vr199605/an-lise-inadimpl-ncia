@@ -30,9 +30,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNÇÕES DE CARREGAMENTO (Separadas por Aba)
+# 2. FUNÇÕES DE CARREGAMENTO (Links de Abas Diferentes)
 @st.cache_data(ttl=300)
 def load_data_aba1():
+    # Link da Aba 1: Inadimplência
     url1 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?output=csv"
     df = pd.read_csv(url1)
     df['Data de Envio'] = pd.to_datetime(df['Data de Envio'], errors='coerce')
@@ -40,7 +41,8 @@ def load_data_aba1():
 
 @st.cache_data(ttl=300)
 def load_data_aba2():
-    url2 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?output=csv"
+    # Link da Aba 2: Controle de Envios (Logs) - GID 204684460
+    url2 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?gid=204684460&single=true&output=csv"
     df = pd.read_csv(url2)
     df['Data de Envio'] = pd.to_datetime(df['Data de Envio'], errors='coerce')
     return df
@@ -53,6 +55,7 @@ try:
     st.sidebar.title("💎 Painel de Filtros")
     st.sidebar.markdown("---")
     
+    # Filtro de Data Global (Combina datas das duas bases para o limite do seletor)
     all_dates = pd.concat([df1_raw['Data de Envio'], df2_raw['Data de Envio']]).dropna()
     min_date = all_dates.min().to_pydatetime() if not all_dates.empty else pd.Timestamp.now().to_pydatetime()
     max_date = all_dates.max().to_pydatetime() if not all_dates.empty else pd.Timestamp.now().to_pydatetime()
@@ -123,13 +126,13 @@ try:
         l1, l2, l3 = st.columns(3)
         with l1: st.metric("Volume de E-mails", len(df2))
         with l2:
-            # Uso exclusivo da coluna 'Enviado Por'
             if 'Enviado Por' in df2.columns:
                 top_p = df2['Enviado Por'].mode()[0] if not df2.empty else "N/A"
                 st.metric("Operador Mais Ativo", top_p)
             else:
                 st.metric("Operador Mais Ativo", "Coluna não encontrada")
         with l3:
+            # Se não houver coluna status, assume total como sucesso para o card
             status_val = (df2['Status'] == 'Sucesso').sum() if 'Status' in df2.columns else len(df2)
             st.metric("Envios Confirmados", status_val)
 
@@ -144,14 +147,14 @@ try:
             prod_df.columns = ['Operador', 'Total de Envios']
 
             with p_col1:
-                # Gráfico horizontal para clareza visual dos nomes (Thayane, Jonathan, etc)
+                # Gráfico horizontal para clareza visual dos nomes
                 st.bar_chart(prod_df.set_index('Operador'), color="#059669", horizontal=True)
             
             with p_col2:
                 # Tabela limpa com os números exatos
                 st.dataframe(prod_df, use_container_width=True, hide_index=True)
         else:
-            st.warning("A coluna 'Enviado Por' não foi detectada. Verifique os dados da planilha.")
+            st.warning("A coluna 'Enviado Por' não foi detectada nesta aba.")
         
         st.divider()
 
@@ -163,7 +166,7 @@ try:
                 st.dataframe(df2['Assunto'].value_counts().head(10).reset_index().rename(columns={'count':'Qtd'}), use_container_width=True, hide_index=True)
         
         with col_sub2:
-            st.subheader("🔍 Histórico Recente (Aba 2)")
+            st.subheader("🔍 Resumo de Logs Recentes")
             cols_log = [c for c in ['Data de Envio', 'Enviado Por', 'Status'] if c in df2.columns]
             st.dataframe(df2[cols_log].head(15), use_container_width=True, hide_index=True)
 
