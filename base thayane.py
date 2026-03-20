@@ -30,7 +30,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNÇÕES DE CARREGAMENTO (Links de Abas Diferentes)
+# 2. FUNÇÕES DE CARREGAMENTO
 @st.cache_data(ttl=300)
 def load_data_aba1():
     url1 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWTtNcaSZtXQ49eVKVbIPbOyC790vzrVDLIcsYeNAgM3jbmpPDLqKHlD3LlAH0qk9T-wuYYAmAGK9d/pub?output=csv"
@@ -53,11 +53,10 @@ try:
     st.sidebar.title("💎 Painel de Filtros")
     st.sidebar.markdown("---")
     
-    # Unificando opções para os filtros de Mês, Ano e Dia
-    # Usando a df1 como referência para as listas de filtros
-    anos = sorted(df1_raw['Ano'].dropna().unique().astype(int), reverse=True)
-    meses = sorted(df1_raw['Mês'].dropna().unique().astype(int))
-    dias = sorted(df1_raw['dia'].dropna().unique().astype(int))
+    # Criando listas de filtros sem conversão forçada para INT (evita erro com 'março')
+    anos = sorted(df1_raw['Ano'].dropna().unique(), reverse=True)
+    meses = sorted(df1_raw['Mês'].dropna().unique())
+    dias = sorted(df1_raw['dia'].dropna().unique())
 
     sel_ano = st.sidebar.multiselect("Ano", options=anos, default=anos)
     sel_mes = st.sidebar.multiselect("Mês", options=meses, default=meses)
@@ -72,11 +71,9 @@ try:
     with tab_inadimplencia:
         st.header("Gestão de Inadimplência e Seguradoras")
         
-        # Filtro de Seguradora específico da Aba 1
         list_seg = df1_raw['Seguradora'].unique() if 'Seguradora' in df1_raw.columns else []
         sel_seg = st.sidebar.multiselect("Filtrar Seguradoras", list_seg, default=list_seg)
         
-        # Aplicação dos Filtros (Ano, Mês, Dia + Seguradora)
         mask1 = (df1_raw['Ano'].isin(sel_ano)) & (df1_raw['Mês'].isin(sel_mes)) & (df1_raw['dia'].isin(sel_dia))
         if 'Seguradora' in df1_raw.columns:
             mask1 &= (df1_raw['Seguradora'].isin(sel_seg))
@@ -113,12 +110,11 @@ try:
                 st.dataframe(seg_counts, use_container_width=True, hide_index=True)
 
     # ---------------------------------------------------------
-    # ABA 2: LOGS DE ENVIO (Filtros Ano, Mês, Dia aplicados)
+    # ABA 2: LOGS DE ENVIO
     # ---------------------------------------------------------
     with tab_logs:
         st.header("Produtividade de Envios")
         
-        # Aplicação dos Filtros na Aba 2 (Ano, Mês, Dia)
         mask2 = (df2_raw['Ano'].isin(sel_ano)) & (df2_raw['Mês'].isin(sel_mes)) & (df2_raw['dia'].isin(sel_dia))
         df2 = df2_raw[mask2]
 
@@ -134,7 +130,6 @@ try:
 
         st.divider()
 
-        # Ranking de Produtividade (Enviado Por)
         st.subheader("👤 Ranking de Produtividade (Enviado Por)")
         if 'Enviado Por' in df2.columns and not df2.empty:
             p_col1, p_col2 = st.columns([1.6, 1])
