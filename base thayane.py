@@ -49,22 +49,26 @@ try:
     df1_raw = load_data_aba1()
     df2_raw = load_data_aba2()
 
-    # --- SIDEBAR GLOBAL ---
+    # Combinando as bases para gerar os filtros dinâmicos
+    df_comb = pd.concat([df1_raw[['Ano', 'Mês', 'dia']], df2_raw[['Ano', 'Mês', 'dia']]]).dropna()
+
+    # --- SIDEBAR COM FILTROS EM CASCATA ---
     st.sidebar.title("💎 Painel de Filtros")
     st.sidebar.markdown("---")
     
-    # MELHORIA: Combinar dados das duas abas para garantir que todos os meses/anos apareçam
-    anos_comb = pd.concat([df1_raw['Ano'], df2_raw['Ano']]).dropna().unique()
-    meses_comb = pd.concat([df1_raw['Mês'], df2_raw['Mês']]).dropna().unique()
-    dias_comb = pd.concat([df1_raw['dia'], df2_raw['dia']]).dropna().unique()
+    # 1. Filtro de Ano
+    anos_disp = sorted(df_comb['Ano'].unique(), reverse=True)
+    sel_ano = st.sidebar.multiselect("Ano", options=anos_disp, default=anos_disp)
 
-    anos = sorted(anos_comb, reverse=True)
-    meses = sorted(meses_comb)
-    dias = sorted(dias_comb)
+    # 2. Filtro de Mês (Depende do Ano)
+    df_filtrado_ano = df_comb[df_comb['Ano'].isin(sel_ano)]
+    meses_disp = sorted(df_filtrado_ano['Mês'].unique())
+    sel_mes = st.sidebar.multiselect("Mês", options=meses_disp, default=meses_disp)
 
-    sel_ano = st.sidebar.multiselect("Ano", options=anos, default=anos)
-    sel_mes = st.sidebar.multiselect("Mês", options=meses, default=meses)
-    sel_dia = st.sidebar.multiselect("Dia", options=dias, default=dias)
+    # 3. Filtro de Dia (Depende do Ano e do Mês)
+    df_filtrado_mes = df_filtrado_ano[df_filtrado_ano['Mês'].isin(sel_mes)]
+    dias_disp = sorted(df_filtrado_mes['dia'].unique())
+    sel_dia = st.sidebar.multiselect("Dia", options=dias_disp, default=dias_disp)
 
     # --- NAVEGAÇÃO POR ABAS ---
     tab_inadimplencia, tab_logs = st.tabs(["🏛️ Análise de Inadimplência", "📧 Controle de Envios (Logs)"])
